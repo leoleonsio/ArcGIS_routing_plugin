@@ -1,0 +1,2 @@
+https://gis.stackexchange.com/questions/158409/generating-graph-edge-list-from-polyline-and-point-shapefiles
+https://www.youtube.com/watch?v=AMxsJvRfESI
