@@ -1,0 +1,13 @@
+Cel:
+Celem zadania jest wyznaczenie zasięgu dojazdu z wybranego punktu, po określonym parametrze czasu.  
+
+Danymi wsadowymi są:
+- warstwa liniowa z drogami - trzeba z niej zrobić graf
+- punkt, z którego liczymy zasięg
+- zasieg czasowy
+
+Pomysł planistyczny jest dobrowolny
+
+1. Warstwą wynikową mogą być pogrubione linie grafu
+2. Krańcowe punkty mogą zostać połączone i wynikiem będzie pole ograniczone przez obwód połączonych punktów granicznych
+3. ??
