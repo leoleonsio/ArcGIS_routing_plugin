@@ -1,5 +1,4 @@
 import arcpy
-#import graph
 
 class Toolbox(object):
     def __init__(self):
@@ -7,64 +6,28 @@ class Toolbox(object):
 		self.alias  = "sinuosity"
 
         # List of tool classes associated with this toolbox
-		#self.tools = [CalculateRoute]	#returns route from point given point to other given point
-		#self.tools = [EquidistantPoints]	#returns set of points with equal route length to a given point
-		self.tools = [CalculateRoute, EquidistantPoints]
+		self.tools = [PrepareData, EquidistantPoints]
 
-class CalculateRoute(object):
+
+class PrepareData(object):
+#dodaje atrybuty długości oraz wierzchołków linii, tworzy warstwę punktową, z której później będzie można wybierać punkty początkowe/końcowe
     def __init__(self):
-        self.label       = "Calculate Route"
-        self.description = "Returns route from point given point to other given point"
+        self.label       = "Prepare data"
+        self.description = "Creates a layer of start/destination points, adds necessary geometry attributes to the input polyline layer."
 
     def getParameterInfo(self):
         #Define parameter definitions
 
         # Input Features parameter
-        startPoint = arcpy.Parameter(
-            displayName="Start point",
-            name="startPoint",
+        inputRoads = arcpy.Parameter(
+            displayName="Input roads layer",
+            name="inputRoads",
             datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
-        startPoint.filter.list = ["Multipoint"]
-		
-	endPoint = arcpy.Parameter(
-	    displayName="End point",
-	    name="endPoint",
-	    datatype="GPFeatureLayer",
-            parameterType="Required",
-            direction="Input")
-        endPoint.filter.list = ["Multipoint"]
-		
-	roads = arcpy.Parameter(
-	    displayName="Roads layer",
-	    name="roads",
-	    datatype="GPFeatureLayer",
-            parameterType="Required",
-            direction="Input")
-        roads.filter.list = ["Polyline"]
-
-        # Route type parameter
-        routeType = arcpy.Parameter(
-            displayName="Route type",
-            name="routeType",
-            datatype="GPString",
-            parameterType="Required",
-            direction="Input")
-        routeType.filter.list = ['Fastest', 'Shortest']
-        routeType.value = 'fastest'     
-        #routeType.enabled = 0	
-		
-		# Route cost parameter
-        isCostFree = arcpy.Parameter(
-            displayName="Cost free",
-            name="isCostFree",
-            datatype="Boolean",
-            parameterType="Required",
-            direction="Input")
-			
-        isCostFree.value = 0
-
+        
+        inputRoads.filter.list = ["Polyline"]
+        
         # Derived Output Features parameter
         outFeatures = arcpy.Parameter(
             displayName="Output Features",
@@ -73,35 +36,30 @@ class CalculateRoute(object):
             parameterType="Derived",
             direction="Output")
         
-        outFeatures.parameterDependencies = [startPoint.name, endPoint.name]
-	#outFeatures.parameterDependencies = [endPoint.name]
+        outFeatures.parameterDependencies = [inputRoads.name, outFeatures.name]
         outFeatures.schema.clone = True
 
-        parameters = [startPoint, endPoint, roads, routeType, isCostFree, outFeatures]
+        parameters = [inputRoads, outFeatures]
         
         return parameters
 
     def isLicensed(self): #optional
         return True
 
-    # def updateParameters(self, parameters): #optional
-        # if parameters[0].altered:
-            # parameters[1].value = arcpy.ValidateFieldName(parameters[1].value,
-                                                          # parameters[0].value)
-        # return
-
     def updateMessages(self, parameters): #optional
         return
 
     def execute(self, parameters, messages):
-        startPoint = parameters[0].valueAsText
-	endPoint = parameters[1].valueAsText
-        roads = parameters[2].valueAsText
-	routeType = parameters[3].valueAsText
-	isCostFree = parameters[4].valueAsText
-
+        inFeatures  = parameters[0].valueAsText
+        outFeatures = "points.shp"
+        arcpy.overwriteoutput = True
+        # arcpy.AddMessage("FeatureVerticesToPoints (" + inFeatures + ")")
+        # arcpy.FeatureVerticesToPoints_management(inFeatures, outFeatures, "ALL")
+        arcpy.AddMessage("AddGeometryAttributes (" + inFeatures + ")")
+        arcpy.AddGeometryAttributes_management(inFeatures, ["LENGTH","LINE_START_MID_END"])
 
 class EquidistantPoints(object):
+	#tworzy graf, liczy zasięgi od danego punktu
     def __init__(self):
         self.label       = "Equidistant points"
         self.description = "Returns set of points with equal route length to a given point"
@@ -120,14 +78,23 @@ class EquidistantPoints(object):
         startPoint.filter.list = ["Polyline"]
 
         # Sinuosity Field parameter
-        routeType = arcpy.Parameter(
-            displayName="Sinuosity Field",
-            name="routeType",
-            datatype="Field",
-            parameterType="Optional",
+        range = arcpy.Parameter(
+            displayName="Range",
+            name="range",
+            datatype="GPString",
+            parameterType="Required",
             direction="Input")
         
-        routeType.value = "sinuosity"
+        range.value = "100"
+		
+        rangeUnit = arcpy.Parameter(
+            displayName="Unit",
+            name="unit",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+        rangeUnit.filter.list = ['minutes', 'meters']
+        rangeUnit.value = 'meters'
         
         # Derived Output Features parameter
         outFeatures = arcpy.Parameter(
@@ -137,45 +104,22 @@ class EquidistantPoints(object):
             parameterType="Derived",
             direction="Output")
         
-        outFeatures.parameterDependencies = [startPoint.name]
+        outFeatures.parameterDependencies = [startPoint.name, range.name, outFeatures.name]
         outFeatures.schema.clone = True
 
-        parameters = [startPoint, routeType, outFeatures]
+        parameters = [startPoint, range, rangeUnit, outFeatures]
         
         return parameters
 
     def isLicensed(self): #optional
         return True
-
-    def updateParameters(self, parameters): #optional
-        if parameters[0].altered:
-            parameters[1].value = arcpy.ValidateFieldName(parameters[1].value,
-                                                          parameters[0].value)
-        return
-
+		
     def updateMessages(self, parameters): #optional
         return
 
     def execute(self, parameters, messages):
         inFeatures  = parameters[0].valueAsText
-        fieldName   = parameters[1].valueAsText
-        
-        if fieldName in ["#", "", None]:
-            fieldName = "sinuosity"
-
-        arcpy.AddField_management(inFeatures, fieldName, 'DOUBLE')
-
-        expression = '''
-import math
-def getSinuosity(shape):
-    length = shape.length
-    d = math.sqrt((shape.firstPoint.X - shape.lastPoint.X) ** 2 +
-                  (shape.firstPoint.Y - shape.lastPoint.Y) ** 2)
-    return d/length
-'''
-
-        arcpy.CalculateField_management(inFeatures,
-                                        fieldName,
-                                        'getSinuosity(!shape!)',
-                                        'PYTHON_9.3',
-                                        expression)
+        range   = parameters[1].valueAsText
+        unit = parameters[2].valueAsText
+		##Zrobi graf, wyznaczy zasiegi, doda do widoku
+        g = Graph(inFeatures)
