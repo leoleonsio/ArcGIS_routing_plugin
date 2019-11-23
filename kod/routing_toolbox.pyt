@@ -122,4 +122,5 @@ class EquidistantPoints(object):
         range   = parameters[1].valueAsText
         unit = parameters[2].valueAsText
 		##Zrobi graf, wyznaczy zasiegi, doda do widoku
-        g = Graph(inFeatures)
+        arcpy.AddMessage("Creating graph from file: " + inFeatures)
+        #g = Graph(inFeatures)
