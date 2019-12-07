@@ -19,7 +19,7 @@ class Edge:
         self.endNode = endNode
         self.length = length
         self.cost = cost
-        self.hash = str(startNode.x) + str(startNode.y) + str(endNode.x) + str(endNode.y)
+        self.hash = startNode.hash + endNode.hash
         self.fid = fid
         
     
@@ -235,7 +235,7 @@ class RangeFromPoint(object):
         return
 
     def execute(self, parameters, messages):
-        arcpy.overwriteoutput = True
+        #arcpy.overwriteoutput = True
         inFeatures  = parameters[0].valueAsText
         range   = int(parameters[1].valueAsText)
         unit = parameters[2].valueAsText
@@ -252,23 +252,13 @@ class RangeFromPoint(object):
             condition = condition + str(fid) + ','
         condition = '"FID" IN (' + condition.rstrip(',') + ')'
         arcpy.AddMessage('select * from ' + inFeatures + ' where ' + condition)
-        arcpy.SelectLayerByAttribute_management
-        (
-            inFeatures, 
-            'NEW_SELECTION', 
-            condition
-        )
+        arcpy.SelectLayerByAttribute_management(inFeatures, 'NEW_SELECTION',condition)
         
         path = arcpy.env.workspace
         file = os.path.join(path, 'range__' + str(range))
+        #file = 'range__' + str(range) + '.shp'
         arcpy.AddMessage('writing to file: ' + file)
-        arcpy.MinimumBoundingGeometry_management
-        (
-            inFeatures, 
-            file, 
-            'CONVEX_HULL', 
-            'ALL'
-        )
+        arcpy.MinimumBoundingGeometry_management(inFeatures, file, 'CONVEX_HULL', 'ALL')
             
         arcpy.SelectLayerByAttribute_management(inFeatures, "CLEAR_SELECTION")
         
