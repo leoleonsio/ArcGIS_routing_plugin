@@ -2,7 +2,6 @@ import arcpy
 import heapq
 import os
 import math
-
 class Node:
     def __init__(self, x, y):
         self.x = x
@@ -28,17 +27,19 @@ class Edge:
         
 
 class Graph:
-    edges = {}    #hash tables
+    edges = {}    
     nodes = {}
+            
     def __init__(self, inFeatures):
         repeatingNodes = 0
         repeatingEdges = 0
-	cost = {"A":140,"D":30,"G":50,"GP":100,"I":50,"L":50,"S":120,"Z":50}
-	cursor = arcpy.SearchCursor(inFeatures)
+        cost = {"A":140,"D":30,"G":50,"GP":100,"I":50,"L":50,"S":120,"Z":50}
+        cursor = arcpy.SearchCursor(inFeatures)
         for row in cursor:
             startNode = Node(row.start_x, row.start_y)
             endNode = Node(row.end_x, row.end_y)
-            newEdge = Edge(row.fid, startNode, endNode, row.length, cost[row.klasaDrogi]*(1000/60))
+            newEdge = Edge(row.fid, startNode, endNode, row.length, row.length/(cost[row.klasaDrogi]*(1000/60)))
+            
             if not self.containsEdge(newEdge):
                 self.edges[newEdge.hash] = newEdge
             else:
@@ -83,20 +84,24 @@ class PriorityQueue:
     def get(self):
         return heapq.heappop(self.elements)[1]
 
-def heuristic(a, b):
+
+def length_heuristic(a, b):
     return math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2)
-	
+
+def time_heuristic(a,b):
+    return math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2)/(140*(1000/60))
+    
 def reconstruct_path(came_from, start, goal):
     current = goal
     path = []
     while current != start:
         path.append(current)
         current = came_from[current]
-    path.append(start) # optional
-    path.reverse() # optional	
+    path.append(start) 
+    path.reverse()   
     return path
-	
-def a_star_search(graph, startPoint, endPoint):
+    
+def a_star_search(graph, startPoint, endPoint, type):
     frontier = PriorityQueue()
     frontier.put(startPoint, 0)
     came_from = {}
@@ -104,33 +109,52 @@ def a_star_search(graph, startPoint, endPoint):
     came_from[startPoint] = None
     cost_so_far[startPoint] = 0
     
-    while not frontier.empty():
-        current = frontier.get()
-    
-	if current == endPoint:
-            break
+    if type == 'shortest':    
+        arcpy.AddMessage('shortest route')
+        while not frontier.empty():
+            current = frontier.get()
         
+            if current == endPoint:
+                break
+            
+            for edge in (graph.nodes[current].edges):
+                next = edge.endNode.hash
+                new_cost = cost_so_far[current] + edge.length
+                if next not in cost_so_far or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + length_heuristic(graph.nodes[endPoint], graph.nodes[next])
+                    frontier.put(next, priority)
+                    came_from[next] = current
+    elif type =='fastest':
+        arcpy.AddMessage('fastest route')     
+        while not frontier.empty():
+            current = frontier.get()
 
-				
-	for edge in (graph.nodes[current].edges):
-            next = edge.endNode.hash
-            new_cost = cost_so_far[current] + edge.length
-            if next not in cost_so_far or new_cost < cost_so_far[next]:
-                cost_so_far[next] = new_cost
-                priority = new_cost + heuristic(graph.nodes[endPoint], graph.nodes[next])
-                frontier.put(next, priority)
-                came_from[next] = current
-    
+            if current == endPoint:
+                break
+            
+            for edge in (graph.nodes[current].edges):
+                next = edge.endNode.hash
+                new_cost = cost_so_far[current] + edge.cost
+                if next not in cost_so_far or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + time_heuristic(graph.nodes[endPoint], graph.nodes[next])
+                    frontier.put(next, priority)
+                    came_from[next] = current
+    else:
+        arcpy.AddMessage('problem with routing type')    
+        
     path = reconstruct_path(came_from, startPoint, endPoint)
     
     ret = []
     distance = 0
+    time = 0
     for i in range(0,len(path)-1):
         ret.append(graph.edges[path[i]+path[i+1]].fid)
         distance+= graph.edges[path[i]+path[i+1]].length
-	
-    return ret,distance
-	
+        time+=graph.edges[path[i]+path[i+1]].cost
+    return ret,distance,time
+    
 class Toolbox(object):
     def __init__(self):
         self.label =  "Routing toolbox"
@@ -199,7 +223,7 @@ class Astar(object):
         #Define parameter definitions
         
         startPoint = arcpy.Parameter(
-            displayName="Input Features",
+            displayName="Roads layer",
             name="startPoint",
             datatype="GPFeatureLayer",
             parameterType="Required",
@@ -207,13 +231,21 @@ class Astar(object):
         startPoint.filter.list = ["Polyline"]
         
         astartype = arcpy.Parameter(
-            displayName="AstarType",
+            displayName="Routing type",
             name="astartype",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
         astartype.filter.list = ['shortest', 'fastest']
         astartype.value = 'shortest'
+        
+        prepdata = arcpy.Parameter(
+            displayName="Prepare data",
+            name="prepdata",
+            datatype="GPBoolean",
+            parameterType="Required",
+            direction="Input")
+        prepdata.value = False
         
         # Derived Output Features parameter
         outFeatures = arcpy.Parameter(
@@ -226,7 +258,7 @@ class Astar(object):
         outFeatures.parameterDependencies = [startPoint.name, astartype.name, outFeatures.name]
         outFeatures.schema.clone = True
 
-        parameters = [startPoint, astartype, outFeatures]
+        parameters = [startPoint, astartype, prepdata, outFeatures]
         
         return parameters
 
@@ -237,23 +269,52 @@ class Astar(object):
         return
 
     def execute(self, parameters, messages):
-        #arcpy.overwriteoutput = True
+    
+        arcpy.env.overwriteOutput = True
         inFeatures  = parameters[0].valueAsText
         type = parameters[1].valueAsText
+        prepdata = parameters[2].valueAsText
 
+        if prepdata == 'true':
+            arcpy.AddMessage('Preparing data.')
+            arcpy.AddMessage('Preparing data..')
+            arcpy.AddGeometryAttributes_management(inFeatures, ["LENGTH","LINE_START_MID_END"])
+            arcpy.AddMessage('Preparing data...')
+            arcpy.AddMessage('Data prepared')
+            
+        arcpy.AddMessage("Creating " + type + " route")
         arcpy.AddMessage("Creating graph from layer: " + inFeatures)
         newGraph = Graph(inFeatures)
         arcpy.AddMessage(newGraph.toString())
-		
+        
         startNodeId = 'X473669.390Y572807.990'
         endNodeId = 'X480816.140Y575680.120'
-        astarpath,distance = a_star_search(newGraph,startNodeId,endNodeId)
-        arcpy.AddMessage('Distance to travel:' +str(distance))
+        astarpath,distance,time = a_star_search(newGraph,startNodeId,endNodeId,type)
+        arcpy.AddMessage('Distance: ' +str(distance))
+        arcpy.AddMessage('Time: ' +str(time))
         condition = ''
         for fid in astarpath:
             condition = condition + str(fid) + ','
         condition = '"FID" IN (' + condition.rstrip(',') + ')'
-        arcpy.AddMessage('select * from ' + inFeatures + ' where ' + condition)
-        arcpy.SelectLayerByAttribute_management(inFeatures, 'NEW_SELECTION',condition)
-		
         
+        
+       
+
+
+        arcpy.AddMessage('select * from ' + inFeatures + ' where ' + condition)
+        arcpy.FeatureClassToFeatureClass_conversion(inFeatures, "./", "route.shp",condition)
+        arcpy.AddMessage('route.shp created')                                    
+        # get the data frame
+        mxd = arcpy.mapping.MapDocument("CURRENT")
+        df = arcpy.mapping.ListDataFrames(mxd,"*")[0]
+
+        # create a new layer
+        newlayer = arcpy.mapping.Layer('./route.shp')
+
+        # add the layer to the map at the bottom of the TOC in data frame 0
+        arcpy.mapping.AddLayer(df, newlayer,"TOP")   
+        arcpy.RefreshActiveView()
+        arcpy.RefreshTOC()
+        
+            
+            
