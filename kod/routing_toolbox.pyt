@@ -30,7 +30,7 @@ class Graph:
     edges = {}
     nodes = {}
     unit = ''
-	endNodes = {}
+    endNodes = {} #nodes with no neighbors
     
     def __init__(self, inFeatures, unit = 'meters'):
         self.unit = unit
@@ -91,17 +91,19 @@ def dijkstra(graph, startNodeId, limit):    #returns dictionary of limiting edge
         counter = counter + 1
         curDistance, curNodeIdx = heapq.heappop(queue)
         
-        #range limit, break loop after reaching
-        if curDistance > limit:
-            break
-			
-		#add graph bounding nodes when no neighbors left for node
-		if len(graph.nodes[curNodeIdx].edges) == 1:
-			edge = graph.nodes[curNodeIdx].edges[0]
-			boundingNode = edge.endNode
-			if boundingNode.hash == curNodeIdx:
-				boundingNode = edge.startNode
-			graph.endNodes[boundingNode.hash] = boundingNode
+        # #range limit, break loop after reaching
+        # if curDistance > limit:
+            # break
+            
+        #add graph ending node when no neighbors
+        if len(graph.nodes[curNodeIdx].edges) == 1:
+            # edge = graph.nodes[curNodeIdx].edges[0]
+            # boundingNode = edge.endNode
+            # if boundingNode.hash == curNodeIdx:
+                # boundingNode = edge.startNode
+                #switch
+                #edge length
+            graph.endNodes[curNodeIdx] = graph.nodes[curNodeIdx]
 
         
         for edge in (graph.nodes[curNodeIdx].edges):  
@@ -161,7 +163,7 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     #computes centroid of limit points
     #connects points in order of azimuth between centroid and Nth point
     #smoothens polygon with Bezier interpolation algorithm
-    
+    arcpy.overwriteoutput = True
     def azimuth(center_x, center_y, x, y):
         angle = degrees(atan2(y - center_y, x - center_x))
         az = (angle + 360) % 360
@@ -176,7 +178,7 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     #disp condition
     #arcpy.AddMessage(condition)
     arcpy.SelectLayerByAttribute_management(inFeatures, 'NEW_SELECTION',condition)
-             
+          
     pointList = []
     with arcpy.da.SearchCursor(inFeatures, ['FID', 'SHAPE@', 'LENGTH']) as cur:
         xSum = 0
@@ -187,6 +189,7 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
             length = row[2]
             dist = limitingEdges[fid]['dist']
             endsSwitched = limitingEdges[fid]['switch']
+            #move point along the edge by the remaining distance value
             rangePoint = polyline.positionAlongLine(dist)
             xSum = xSum + rangePoint[0].X
             ySum = ySum + rangePoint[0].Y
@@ -208,9 +211,11 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
          
     #create rangePoints layer
     suffix = '__' + str(range) + '_' + unit
+    arcpy.AddMessage('Creating limit points')
     filename = 'rangePoints' + suffix
     path = arcpy.env.workspace
     filepath = os.path.join(path, filename)
+    arcpy.AddMessage('path: ' + path + ', filename: ' + filename)
     arcpy.CreateFeatureclass_management(path, filename, 'POINT')
     arcpy.AddField_management(filepath, 'remainingDistance')
     arcpy.AddField_management(filepath, 'azimuth')
@@ -218,10 +223,11 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     for row in pointList:
         cursor.insertRow(row)
     del cursor
-    #disp points
+    #disp range limit points
     #addToDisplay(filepath)
     
     #connect points ordered by azimuth
+    arcpy.AddMessage('Creating range polygon')
     inFeatures = filepath
     filename = 'rangeLines' + suffix
     filepath = os.path.join(path, filename)
@@ -234,23 +240,28 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     filename = 'rangeArea' + suffix
     filepath = os.path.join(path, filename)
     arcpy.FeatureToPolygon_management(inFeatures, filepath, "", "NO_ATTRIBUTES", "")
-    #disp polygon
-    #addToDisplay(filepath)
     polygon = filepath
-	
-	#pseudocode
-	#check if points inside polygon, if not -> add them as vertices
-	for id in endNodes:
-		x = endNodes[id].x
-		y = endNodes[id].y
-		newPoint = arcpy.Point(x, y)
-		if not polygon.contains(newPoint):
-			polygon.addvertex(newPoint)
-	
-
+    
+    #graph ending points visited
+    filename = 'pointsReachedWithoutLimit' + suffix
+    arcpy.AddMessage('Creating reached graph ending points: ' + filename)
+    path = arcpy.env.workspace
+    filepath = os.path.join(path, filename)
+    arcpy.CreateFeatureclass_management(path, filename, 'POINT')
+    cursor = arcpy.da.InsertCursor(filepath,['SHAPE@XY'])
+    for id in endNodes:
+        x = endNodes[id].x
+        y = endNodes[id].y
+        newPoint = arcpy.Point(x, y)
+        az = azimuth(centroid[0], centroid[1], x, y)
+        cursor.insertRow([arcpy.PointGeometry(newPoint)])
+    del cursor
+    addToDisplay(filepath)
+    
     #smoothen polygon
-    inFeatures = filepath
+    inFeatures = polygon
     filename = 'smoothArea' + suffix
+    arcpy.AddMessage('Creating smooth polygon: ' + filename)
     filepath = os.path.join(path, filename)
     arcpy.cartography.SmoothPolygon(inFeatures, filepath, 'BEZIER_INTERPOLATION', 0)
     #disp smooth polygon
@@ -416,7 +427,7 @@ class RangeFromPoint(object):
         arcpy.AddMessage(newGraph.toString())
         
         #add start point to map
-        createPoint(startNodeId, range, unit)
+        #createPoint(startNodeId, range, unit)
         
         #obtain and visualize limiting edges
         limitingEdges, endNodes = dijkstra(newGraph, startNodeId, range)
