@@ -422,7 +422,7 @@ class RangeFromPoint(object):
         arcpy.AddMessage(newGraph.toString())
         
         #add start point to map
-        #createPoint(startNodeId, range, unit)
+        createPoint(startNodeId, range, unit)
         
         #obtain and visualize limiting edges
         limitingEdges, endNodes = dijkstra(newGraph, startNodeId, range)
