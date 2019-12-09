@@ -159,7 +159,7 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     #computes centroid of limit points
     #connects points in order of azimuth between centroid and Nth point
     #smoothens polygon with Bezier interpolation algorithm
-    arcpy.overwriteoutput = True
+    #adds graph ending points which were reached without limit
     def azimuth(center_x, center_y, x, y):
         angle = degrees(atan2(y - center_y, x - center_x))
         az = (angle + 360) % 360
@@ -211,7 +211,6 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     filename = 'rangePoints' + suffix
     path = arcpy.env.workspace
     filepath = os.path.join(path, filename)
-    arcpy.AddMessage('path: ' + path + ', filename: ' + filename)
     arcpy.CreateFeatureclass_management(path, filename, 'POINT')
     arcpy.AddField_management(filepath, 'remainingDistance')
     arcpy.AddField_management(filepath, 'azimuth')
@@ -427,6 +426,7 @@ class RangeFromPoint(object):
         
         #obtain and visualize limiting edges
         limitingEdges, endNodes = dijkstra(newGraph, startNodeId, range)
+        arcpy.AddMessage('Range edges calculated. Beginning geoprocessing...')
         createArea(inFeatures, limitingEdges, endNodes, range, unit)
         del newGraph
         del limitingEdges
