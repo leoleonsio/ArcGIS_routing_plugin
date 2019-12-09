@@ -30,6 +30,7 @@ class Graph:
     edges = {}
     nodes = {}
     unit = ''
+	endNodes = {}
     
     def __init__(self, inFeatures, unit = 'meters'):
         self.unit = unit
@@ -93,11 +94,15 @@ def dijkstra(graph, startNodeId, limit):    #returns dictionary of limiting edge
         #range limit, break loop after reaching
         if curDistance > limit:
             break
-          
-        #add to limiting edges when no neighbors left for node (adds too many edges)
-        # if len(graph.nodes[curNodeIdx].edges) == 1:
-            # edge = graph.nodes[curNodeIdx].edges[0]
-            # limitingEdges[edge.fid] = {'dist' : edge.length, 'switch' : False}
+			
+		#add graph bounding nodes when no neighbors left for node
+		if len(graph.nodes[curNodeIdx].edges) == 1:
+			edge = graph.nodes[curNodeIdx].edges[0]
+			boundingNode = edge.endNode
+			if boundingNode.hash == curNodeIdx:
+				boundingNode = edge.startNode
+			graph.endNodes[boundingNode.hash] = boundingNode
+
         
         for edge in (graph.nodes[curNodeIdx].edges):  
                 neighbor = edge.endNode
@@ -141,7 +146,7 @@ def dijkstra(graph, startNodeId, limit):    #returns dictionary of limiting edge
         # else:
             # arcpy.AddMessage(str(key) + ', dist:' + str(distances[key]))
     # arcpy.AddMessage(str(notFound) + '/' + str(len(graph.nodes)) + ' nodes not reached')
-    return limitingEdges
+    return limitingEdges, graph.endNodes
     
 def addToDisplay(filepath, level = 'BOTTOM'):
     mxd = arcpy.mapping.MapDocument('CURRENT')  
@@ -151,7 +156,7 @@ def addToDisplay(filepath, level = 'BOTTOM'):
     arcpy.RefreshActiveView()  
     arcpy.RefreshTOC()
 
-def createArea(inFeatures, limitingEdges, range, unit):
+def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     #creates limit points on the limiting edges (based on remaining distances)
     #computes centroid of limit points
     #connects points in order of azimuth between centroid and Nth point
@@ -232,6 +237,16 @@ def createArea(inFeatures, limitingEdges, range, unit):
     #disp polygon
     #addToDisplay(filepath)
     polygon = filepath
+	
+	#pseudocode
+	#check if points inside polygon, if not -> add them as vertices
+	for id in endNodes:
+		x = endNodes[id].x
+		y = endNodes[id].y
+		newPoint = arcpy.Point(x, y)
+		if not polygon.contains(newPoint):
+			polygon.addvertex(newPoint)
+	
 
     #smoothen polygon
     inFeatures = filepath
@@ -404,7 +419,7 @@ class RangeFromPoint(object):
         createPoint(startNodeId, range, unit)
         
         #obtain and visualize limiting edges
-        limitingEdges = dijkstra(newGraph, startNodeId, range)
-        createArea(inFeatures, limitingEdges, range, unit)
+        limitingEdges, endNodes = dijkstra(newGraph, startNodeId, range)
+        createArea(inFeatures, limitingEdges, endNodes, range, unit)
         del newGraph
         del limitingEdges
