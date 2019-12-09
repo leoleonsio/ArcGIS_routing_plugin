@@ -90,10 +90,6 @@ def dijkstra(graph, startNodeId, limit):    #returns dictionary of limiting edge
     while queue:
         counter = counter + 1
         curDistance, curNodeIdx = heapq.heappop(queue)
-        
-        # #range limit, break loop after reaching
-        # if curDistance > limit:
-            # break
             
         #add graph ending node when no neighbors
         if len(graph.nodes[curNodeIdx].edges) == 1:
