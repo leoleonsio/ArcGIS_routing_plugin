@@ -147,12 +147,13 @@ def dijkstra(graph, startNodeId, limit):    #returns dictionary of limiting edge
     return limitingEdges, graph.endNodes
     
 def addToDisplay(filepath, level = 'BOTTOM'):
-    mxd = arcpy.mapping.MapDocument('CURRENT')  
-    df = arcpy.mapping.ListDataFrames(mxd, 'Layers')[0]
-    layer = arcpy.mapping.Layer(filepath)
-    arcpy.mapping.AddLayer(df, layer, level)
-    arcpy.RefreshActiveView()  
-    arcpy.RefreshTOC()
+	None
+	# mxd = arcpy.mapping.MapDocument('CURRENT')  
+	# df = arcpy.mapping.ListDataFrames(mxd, 'Layers')[0]
+	# layer = arcpy.mapping.Layer(filepath)
+	# arcpy.mapping.AddLayer(df, layer, level)
+	# arcpy.RefreshActiveView()  
+	# arcpy.RefreshTOC()
 
 def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     #creates limit points on the limiting edges (based on remaining distances)
@@ -206,15 +207,15 @@ def createArea(inFeatures, limitingEdges, endNodes, range, unit):
     arcpy.SelectLayerByAttribute_management(inFeatures, 'CLEAR_SELECTION')            
          
     #create rangePoints layer
-    suffix = '__' + str(range) + '_' + unit
+    suffix = '__' + str(range) + '_' + unit +'.shp'
     arcpy.AddMessage('Creating limit points')
     filename = 'rangePoints' + suffix
     path = arcpy.env.workspace
     filepath = os.path.join(path, filename)
     arcpy.CreateFeatureclass_management(path, filename, 'POINT')
-    arcpy.AddField_management(filepath, 'remainingDistance')
+    arcpy.AddField_management(filepath, 'remDist')
     arcpy.AddField_management(filepath, 'azimuth')
-    cursor = arcpy.da.InsertCursor(filepath,['azimuth', 'remainingDistance', 'SHAPE@XY'])
+    cursor = arcpy.da.InsertCursor(filepath,['azimuth', 'remDist', 'SHAPE@XY'])
     for row in pointList:
         cursor.insertRow(row)
     del cursor
@@ -414,7 +415,8 @@ class RangeFromPoint(object):
         startNodeId = parameters[1].valueAsText
         range   = int(parameters[2].valueAsText)
         unit = parameters[3].valueAsText
-
+		
+        arcpy.env.workspace = 'D:\\DANE\\PowalkaLeon\\AF_GI\\Analizy_GI'
         #select all in case arcmap gets confused
         arcpy.SelectLayerByAttribute_management(inFeatures, 'NEW_SELECTION','1 = 1')
         arcpy.AddMessage('Creating graph from layer: ' + inFeatures)
@@ -422,7 +424,7 @@ class RangeFromPoint(object):
         arcpy.AddMessage(newGraph.toString())
         
         #add start point to map
-        createPoint(startNodeId, range, unit)
+        #createPoint(startNodeId, range, unit)
         
         #obtain and visualize limiting edges
         limitingEdges, endNodes = dijkstra(newGraph, startNodeId, range)
