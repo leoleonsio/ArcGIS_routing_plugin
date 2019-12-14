@@ -5,11 +5,12 @@
         <Tool caption="Select end point " category="Pag_zad_1" class="EndPointSelection" id="Routing_addin.endpoint_tool" image="Images\meta.png" message="Select end point for routing" tip="Select end point for routing"><Help heading="Select point">Select end point for routing</Help></Tool>
         <ComboBox caption="Routing type" category="Pag_zad_1" class="routing_type" id="Routing_addin.routing_type_combobox" itemSizeString="WWWWWW" message="Select cost type" rows="4" sizeString="WWWWWW" tip="Select cost type"><Help heading="" /></ComboBox>
         <Button caption="Calculate path" category="Pag_zad_1" class="path_button" id="Routing_addin.path_button_button" image="" message="Calculate path" tip="Calculate path"><Help heading="Calculate path">Calculate path</Help></Button>
+        <ComboBox caption="Algorithm" category="Pag_zad_1" class="algorithmSelection" id="Routing_addin.algorithm_combobox" itemSizeString="WWWWWW" message="Select routing algorithm" rows="4" sizeString="WWWWWW" tip="Select routing algorithm"><Help heading="" /></ComboBox>
         </Commands>
     <Extensions>
         </Extensions>
     <Toolbars>
-        <Toolbar caption="Path between two points" category="Pag_zad_1" id="my_routing.toolbar" showInitially="true"><Items><ComboBox refID="Routing_addin.layer_combobox" /><Tool refID="Routing_addin.startpoint_tool" /><Tool refID="Routing_addin.endpoint_tool" /><ComboBox refID="Routing_addin.routing_type_combobox" /><Button refID="Routing_addin.path_button_button" /></Items></Toolbar>
+        <Toolbar caption="Path between two points" category="Pag_zad_1" id="my_routing.toolbar" showInitially="true"><Items><ComboBox refID="Routing_addin.layer_combobox" /><Tool refID="Routing_addin.startpoint_tool" /><Tool refID="Routing_addin.endpoint_tool" /><ComboBox refID="Routing_addin.routing_type_combobox" /><ComboBox refID="Routing_addin.algorithm_combobox" /><Button refID="Routing_addin.path_button_button" /></Items></Toolbar>
         </Toolbars>
     <Menus>
         </Menus>

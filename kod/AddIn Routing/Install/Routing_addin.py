@@ -107,7 +107,27 @@ class EndPointSelection(object):
 
     def onRectangle(self, rectangle_geometry):
         pass
-
+        
+class algorithmSelection(object):
+    """Implementation for Routing_addin.algorithm_combobox (ComboBox)"""
+    def __init__(self):
+        self.items = ["astar", "dijkstra"]
+        self.editable = True
+        self.enabled = False
+        self.dropdownWidth = 'WWWWWW'
+        self.width = 'WWWWWW'
+    def onSelChange(self, selection):
+        self.value = selection
+        self.refresh()
+        path_button_button.enabled = True
+    def onEditChange(self, text):
+        pass
+    def onFocus(self, focused):
+        pass
+    def onEnter(self):
+        pass
+    def refresh(self):
+        pass
 
 class StartPointSelection(object):
     """Implementation for startpoint_tool (Tool)"""
@@ -259,7 +279,7 @@ class path_button(object):
         # prepdata = False
         inFeatures = layer_combobox.layerpath
         type = routing_type_combobox.value
-
+        algorithm = algorithm_combobox.value
         cursor = arcpy.da.UpdateCursor('./startpoint.shp', ["SHAPE@XY"])
         for row in cursor:
             xstart = row[0][0]
@@ -284,22 +304,25 @@ class path_button(object):
         # endNodeId = 'X480816.140Y575680.120'
         # endNodeId = 'X473669.4Y572808.0'
         # startNodeId = 'X480816.1Y575680.1'
-        astarpath, distance, time = a_star_search(newGraph, startNodeId, endNodeId, type)
-        if astarpath == distance == time == -1:
+        if algorithm == 'astar':
+            path, distance, time = a_star_search(newGraph, startNodeId, endNodeId, type)
+        else:
+            path, distance, time = dijkstra(newGraph, startNodeId, endNodeId, type)            
+        if path == distance == time == -1:
             return
         print('Distance(m): ' + distance)
         print('Time(hh:mm:ss): ' +  str(datetime.timedelta(minutes=float(time))))
         condition = ''
-        for fid in astarpath:
+        for fid in path:
             condition = condition + str(fid) + ','
         condition = '"FID" IN (' + condition.rstrip(',') + ')'
         arcpy.FeatureClassToFeatureClass_conversion(inFeatures, "./", "route.shp", condition)
-        mxd = arcpy.mapping.MapDocument("CURRENT")
-        df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
-        newlayer = arcpy.mapping.Layer('./route.shp')
-        arcpy.mapping.AddLayer(df, newlayer, "TOP")
-        arcpy.RefreshActiveView()
-        arcpy.RefreshTOC()
+        # mxd = arcpy.mapping.MapDocument("CURRENT")
+        # df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
+        # newlayer = arcpy.mapping.Layer('./route.shp')
+        # arcpy.mapping.AddLayer(df, newlayer, "TOP")
+        # arcpy.RefreshActiveView()
+        # arcpy.RefreshTOC()
 
 
 class routing_type(object):
@@ -313,7 +336,7 @@ class routing_type(object):
         self.width = '123456789'
 
     def onSelChange(self, selection):
-        path_button_button.enabled = True
+        algorithm_combobox.enabled = True
         self.value = selection
         self.refresh()
 
@@ -465,8 +488,10 @@ def a_star_search(graph, startPoint, endPoint, type):
         while not frontier.empty():
             counter+=1
             current = frontier.get()
+            
             if current == endPoint:
                 break
+                
             for edge in graph.nodes[current].edges:
                 if edge.endNode.hash != current:
                     next = edge.endNode.hash
@@ -507,7 +532,84 @@ def a_star_search(graph, startPoint, endPoint, type):
         print('problem with routing type')
     endtime = datetime.datetime.now()
     time = endtime - starttime
-    print('Algorithm time: ' + str(time))
+    print('A* algorithm time: ' + str(time))
+    print('Number of nodes traversed: ' + str(counter) +'/'+ str(len(graph.nodes)))
+    print('Number of edges traversed: ' + str(ecounter) +'/'+ str(len(graph.edges)))
+    path = reconstruct_path(came_from, startPoint, endPoint)
+
+    ret = []
+    distance = 0
+    time = 0
+    for i in range(0, len(path) - 1):
+        if path[i] + path[i + 1] in graph.edges:
+            ret.append(graph.edges[path[i] + path[i + 1]].fid)
+            distance += graph.edges[path[i] + path[i + 1]].length
+            time += graph.edges[path[i] + path[i + 1]].cost
+        else:
+            ret.append(graph.edges[path[i + 1] + path[i]].fid)
+            distance += graph.edges[path[i + 1] + path[i]].length
+            time += graph.edges[path[i + 1] + path[i]].cost
+    return ret, format(distance, '.1f'), format(time, '.1f')
+
+def dijkstra(graph, startPoint, endPoint, type):
+    starttime = datetime.datetime.now()
+    frontier = PriorityQueue()
+    frontier.put(startPoint, 0)
+    came_from = {}
+    cost_so_far = {}
+    came_from[startPoint] = None
+    cost_so_far[startPoint] = 0
+    counter = 0
+    ecounter = 0
+    if type == 'shortest':
+        while not frontier.empty():
+            counter+=1
+            current = frontier.get()
+            
+            if current == endPoint:
+                break
+                
+            for edge in graph.nodes[current].edges:
+                if edge.endNode.hash != current:
+                    next = edge.endNode.hash
+                else:
+                    next = edge.startNode.hash
+                new_cost = cost_so_far[current] + edge.length
+                if next not in cost_so_far or new_cost < cost_so_far[next]:
+                    ecounter+=1
+                    cost_so_far[next] = new_cost
+                    priority = new_cost
+                    frontier.put(next, priority)
+                    came_from[next] = current
+            if frontier.empty():
+                print('Brak polaczenia miedzy punktami')
+                return -1,-1,-1
+    elif type == 'fastest':
+        while not frontier.empty():
+            counter+=1
+            current = frontier.get()
+            if current == endPoint:
+                break
+            for edge in graph.nodes[current].edges:
+                if edge.endNode.hash != current:
+                    next = edge.endNode.hash
+                else:
+                    next = edge.startNode.hash
+                new_cost = cost_so_far[current] + edge.cost
+                if next not in cost_so_far or new_cost < cost_so_far[next]:
+                    ecounter+=1
+                    cost_so_far[next] = new_cost
+                    priority = new_cost
+                    frontier.put(next, priority)
+                    came_from[next] = current
+            if frontier.empty():
+                print('Brak polaczenia miedzy punktami')
+                return -1,-1,-1
+    else:
+        print('problem with routing type')
+    endtime = datetime.datetime.now()
+    time = endtime - starttime
+    print('Dijkstra algorithm time: ' + str(time))
     print('Number of nodes traversed: ' + str(counter) +'/'+ str(len(graph.nodes)))
     print('Number of edges traversed: ' + str(ecounter) +'/'+ str(len(graph.edges)))
     path = reconstruct_path(came_from, startPoint, endPoint)
